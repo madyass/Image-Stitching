@@ -167,37 +167,38 @@ def align_and_merge_images(img1, img2, src_points, dst_points):
 
     return canvas
 
-    def find_correspondences(img1, img2, max_features=500, good_match_percent=0.15):
-        """
-        Finds correspondences between two images using ORB feature detection and matching.
+def find_correspondences(img1, img2, max_matches=50):
+    """
+    Finds correspondence points between two images using ORB feature detection and brute-force matching.
+    Returns a list of dicts: {"img1_xy": (x1, y1), "img2_xy": (x2, y2)}
+    """
+    # Convert to grayscale if needed
+    if len(img1.shape) == 3:
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    else:
+        gray1 = img1.copy()
+    if len(img2.shape) == 3:
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    else:
+        gray2 = img2.copy()
 
-        Returns a list of dictionaries with keys 'img1_xy' and 'img2_xy'.
-        """
-        # Convert images to grayscale
-        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY) if len(img1.shape) == 3 else img1
-        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY) if len(img2.shape) == 3 else img2
+    # ORB detector
+    orb = cv2.ORB_create()
+    kp1, des1 = orb.detectAndCompute(gray1, None)
+    kp2, des2 = orb.detectAndCompute(gray2, None)
 
-        # ORB detector
-        orb = cv2.ORB_create(max_features)
-        keypoints1, descriptors1 = orb.detectAndCompute(gray1, None)
-        keypoints2, descriptors2 = orb.detectAndCompute(gray2, None)
+    # Brute-force matcher
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(des1, des2)
+    matches = sorted(matches, key=lambda x: x.distance)[:max_matches]
 
-        # Matcher
-        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        matches = matcher.match(descriptors1, descriptors2)
-        matches = sorted(matches, key=lambda x: x.distance)
-
-        num_good_matches = int(len(matches) * good_match_percent)
-        good_matches = matches[:num_good_matches]
-
-        correspondences = []
-        for m in good_matches:
-            pt1 = keypoints1[m.queryIdx].pt
-            pt2 = keypoints2[m.trainIdx].pt
-            correspondences.append({
-                "img1_xy": [int(round(pt1[0])), int(round(pt1[1]))],
-                "img2_xy": [int(round(pt2[0])), int(round(pt2[1]))]
-            })
-
-        return correspondences
+    data = []
+    for m in matches:
+        pt1 = kp1[m.queryIdx].pt  # (x, y) in img1
+        pt2 = kp2[m.trainIdx].pt  # (x, y) in img2
+        data.append({
+            "img1_xy": np.array(pt1),
+            "img2_xy": np.array(pt2)
+        })
+    return data
 
