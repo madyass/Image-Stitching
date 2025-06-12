@@ -167,29 +167,37 @@ def align_and_merge_images(img1, img2, src_points, dst_points):
 
     return canvas
 
+    def find_correspondences(img1, img2, max_features=500, good_match_percent=0.15):
+        """
+        Finds correspondences between two images using ORB feature detection and matching.
 
-def find_correspondences(img1, img2):
-    # Convert to grayscale
-    gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
-    gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+        Returns a list of dictionaries with keys 'img1_xy' and 'img2_xy'.
+        """
+        # Convert images to grayscale
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY) if len(img1.shape) == 3 else img1
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY) if len(img2.shape) == 3 else img2
 
-    # SIFT detector
-    sift = cv2.SIFT_create()
-    keypoints1, descriptors1 = sift.detectAndCompute(gray1, None)
-    keypoints2, descriptors2 = sift.detectAndCompute(gray2, None)
+        # ORB detector
+        orb = cv2.ORB_create(max_features)
+        keypoints1, descriptors1 = orb.detectAndCompute(gray1, None)
+        keypoints2, descriptors2 = orb.detectAndCompute(gray2, None)
 
-    # Feature matching
-    bf = cv2.BFMatcher()
-    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+        # Matcher
+        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        matches = matcher.match(descriptors1, descriptors2)
+        matches = sorted(matches, key=lambda x: x.distance)
 
-    # Lowe’s ratio test
-    good = []
-    for m, n in matches:
-        if m.distance < 0.75 * n.distance:
-            good.append(m)
+        num_good_matches = int(len(matches) * good_match_percent)
+        good_matches = matches[:num_good_matches]
 
-    # Extract matched keypoints
-    src_pts = np.float32([keypoints1[m.queryIdx].pt for m in good])
-    dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in good])
+        correspondences = []
+        for m in good_matches:
+            pt1 = keypoints1[m.queryIdx].pt
+            pt2 = keypoints2[m.trainIdx].pt
+            correspondences.append({
+                "img1_xy": [int(round(pt1[0])), int(round(pt1[1]))],
+                "img2_xy": [int(round(pt2[0])), int(round(pt2[1]))]
+            })
 
-    return src_pts, dst_pts
+        return correspondences
+
